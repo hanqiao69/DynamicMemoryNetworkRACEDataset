@@ -299,6 +299,8 @@ if __name__ == '__main__':
                             print(f'Epoch {epoch}] [Training] loss : {loss.item(): {10}.{8}}, '
                                   f'acc : {total_acc / cnt: {5}.{4}}, batch_idx : {batch_idx}')
                         optim.step()
+                        if batch_idx % 100 == 0:
+                            torch.save(model.state_dict(), CHECKPOINT_PATH)
 
                     dset.set_mode('valid')
                     valid_loader = DataLoader(dset, batch_size=1, shuffle=False, collate_fn=pad_collate)
