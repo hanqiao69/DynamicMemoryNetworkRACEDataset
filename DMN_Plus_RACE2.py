@@ -238,34 +238,58 @@ class DMNPlus(nn.Module):
 
     def get_loss(self, contexts, questions, targets, options):
         output = self.forward(contexts, questions)
+        # print('debug output: ', output.shape)
         preds = F.softmax(output, dim=-1)
-        _, pred_ids = torch.max(preds, dim=-1)
-        preds = preds.squeeze(0) #.transpose(1,0) #.long()
-        targets = targets.squeeze(0).long()
-        pred_ids = pred_ids.squeeze(0)
-        # print('debug msg output shape: ', contexts.shape, questions.shape, preds.shape, pred_ids.shape, targets.shape)
-        loss = self.criterion(preds, targets)
+        _, pred_ids = torch.max(preds, dim=2)
+        acc = self.choose_option(pred_ids, targets, options)
+
+        targets = targets.view(-1,1).squeeze(1)
+        output = output.view(targets.shape[0], -1)
+        # print('debug msg: ', output.shape, targets.shape)
+        loss = self.criterion(output, targets.long())
         reg_loss = 0
         for param in self.parameters():
             reg_loss += 0.001 * torch.sum(param * param)
         # preds = F.softmax(output, dim=-1)
         # _, pred_ids = torch.max(preds, dim=1)
 
-        acc = self.choose_option(preds, targets, options)
+        # acc = self.choose_option(pred_ids, targets, options)
         # corrects = (pred_ids.data == targets.data)
         # acc = torch.mean(corrects.float())
         return loss + reg_loss, acc
 
-    def choose_option(self, preds, targets, options):
-        options = options.squeeze(0).long()
-        # print('debug shape: ', preds.shape, targets.shape, options.shape)
-        losses = [self.criterion(preds, option) for option in options]
-        min_loss_idx = np.argmin(losses)
-        # print('debug target and option: ', targets, options[min_loss_idx], options)
-        if torch.all(targets.eq(options[min_loss_idx])):
-        # if (targets.data == options[min_loss_idx].data) == MAX_ANS_LEN:
-            return 1.
-        else: return 0.
+    def choose_option(self, pred_ids, targets, options):
+        # print('debug shapes: ', pred_ids.shape, targets.shape, options.shape)
+        correct = 0.
+        batch_size = options.shape[0]
+        pred_ids = pred_ids.unsqueeze(1)
+        # print('debug pred_ids: ', pred_ids.shape)
+        pred_ids_expanded = pred_ids.repeat(1,4,1)
+        # print('debug pred_ids_expanded: ', pred_ids_expanded.shape)
+        diffs = pred_ids_expanded - options
+        diffs_summed = torch.sum(diffs, dim=2)
+        _, option_idxs = torch.max(diffs_summed, dim=1)
+        # print('debug option_idxs: ', option_idxs)
+        for i in range(batch_size):
+            idx = int(option_idxs[i])
+            selected = options[i,idx]
+            if torch.all(targets[i].eq(selected)):
+                correct += 1.
+        return correct / batch_size
+
+
+        # squeezed_dim = targets.shape[0]
+        # options = options.view(-1, squeezed_dim)
+        # losses = [self.criterion(output, option) for option in options]
+        # # options = options.squeeze(0).long()
+        # # print('debug shape: ', preds.shape, targets.shape, options.shape)
+        # # losses = [self.criterion(preds, option) for option in options]
+        # # min_loss_idx = np.argmin(losses)
+        # # # print('debug target and option: ', targets, options[min_loss_idx], options)
+        # # if torch.all(targets.eq(options[min_loss_idx])):
+        # # # if (targets.data == options[min_loss_idx].data) == MAX_ANS_LEN:
+        # #     return 1.
+        # # else: return 0.
 
 
 if __name__ == '__main__':
@@ -288,7 +312,7 @@ if __name__ == '__main__':
 
             for epoch in range(256):
                 dset.set_mode('train')
-                train_loader = DataLoader(dset, batch_size=1, shuffle=True, collate_fn=pad_collate)
+                train_loader = DataLoader(dset, batch_size=2, shuffle=True, collate_fn=pad_collate)
 
                 model.train()
                 if not early_stopping_flag:
@@ -314,7 +338,7 @@ if __name__ == '__main__':
                         optim.step()
 
                     dset.set_mode('valid')
-                    valid_loader = DataLoader(dset, batch_size=1, shuffle=False, collate_fn=pad_collate)
+                    valid_loader = DataLoader(dset, batch_size=2, shuffle=False, collate_fn=pad_collate)
 
                     model.eval()
                     total_acc = 0
@@ -352,7 +376,7 @@ if __name__ == '__main__':
                     break
 
             dset.set_mode('test')
-            test_loader = DataLoader(dset, batch_size=1, shuffle=False, collate_fn=pad_collate)
+            test_loader = DataLoader(dset, batch_size=2, shuffle=False, collate_fn=pad_collate)
             test_acc = 0
             cnt = 0
 

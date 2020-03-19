@@ -262,7 +262,7 @@ if __name__ == '__main__':
     dset_train = RACEDataset(mode='train')
     print('dataset len: ', len(dset_train))
     print('VOCAB size: ', len(dset_train.QA.VOCAB))
-    train_loader = DataLoader(dset_train, batch_size=1, shuffle=False, collate_fn=pad_collate)
+    train_loader = DataLoader(dset_train, batch_size=2, shuffle=False, collate_fn=pad_collate)
     idx = 0
     for batch_idx, data in enumerate(train_loader):
         contexts, questions, answers, options = data
